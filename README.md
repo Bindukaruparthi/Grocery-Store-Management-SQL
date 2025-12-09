@@ -48,7 +48,7 @@ grocery-store-management-sql/
 
 **How to Run the Project**
 1.Clone the repository
-git clone https://github.com/your-username/grocery-store-management-sql.git
+git clone https://github.com/BinduKaruparthi/grocery-store-management-sql.git
 cd grocery-store-management-sql
 2.Open your SQL environment (MySQL, PostgreSQL, or SQL Server)
 3.Run the main SQL code
