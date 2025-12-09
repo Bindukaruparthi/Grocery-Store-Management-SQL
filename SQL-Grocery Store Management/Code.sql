@@ -1,0 +1,300 @@
+create database Grocery_Store_Management;
+use grocery_store_management;
+-- 1. Supplier Table
+CREATE TABLE IF NOT EXISTS supplier (
+    sup_id TINYINT PRIMARY KEY,
+    sup_name VARCHAR(255),
+    address TEXT
+);
+
+select * from supplier;
+
+-- 2. Categories Table
+CREATE TABLE IF NOT EXISTS categories (
+    cat_id TINYINT PRIMARY KEY,
+    cat_name VARCHAR(255)
+);
+
+select * from categories;
+
+-- 3. Employees Table
+CREATE TABLE IF NOT EXISTS employees (
+    emp_id TINYINT PRIMARY KEY,
+    emp_name VARCHAR(255),
+    hire_date VARCHAR(255)
+);
+
+select * from employees;
+
+-- 4. Customers Table
+CREATE TABLE IF NOT EXISTS customers (
+    cust_id SMALLINT PRIMARY KEY,
+    cust_name VARCHAR(255),
+    address TEXT
+);
+
+select * from customers;
+
+-- 5. Products Table
+CREATE TABLE IF NOT EXISTS products (
+    prod_id TINYINT PRIMARY KEY,
+    prod_name VARCHAR(255),
+    sup_id TINYINT,
+    cat_id TINYINT,
+    price DECIMAL(10,2),
+    FOREIGN KEY (sup_id) REFERENCES supplier(sup_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (cat_id) REFERENCES categories(cat_id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+select * from products;
+
+-- 6. Orders Table
+CREATE TABLE IF NOT EXISTS orders (
+    ord_id SMALLINT PRIMARY KEY,
+    cust_id SMALLINT,
+    emp_id TINYINT,
+    order_date VARCHAR(255),
+    FOREIGN KEY (cust_id) REFERENCES customers(cust_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (emp_id) REFERENCES employees(emp_id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+select * from orders;
+
+-- 7. Order_Details Table
+CREATE TABLE IF NOT EXISTS order_details (
+    ord_detID SMALLINT AUTO_INCREMENT PRIMARY KEY,
+    ord_id SMALLINT,
+    prod_id TINYINT,
+    quantity TINYINT,
+    each_price DECIMAL(10,2),
+    total_price DECIMAL(10,2),
+    FOREIGN KEY (ord_id) REFERENCES orders(ord_id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+    FOREIGN KEY (prod_id) REFERENCES products(prod_id)
+        ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+select * from supplier;
+select * from categories;
+select * from employees;
+select * from customers;
+select * from products;
+select * from orders;
+select * from order_details;
+
+
+-- Analysis Questions
+1.0 Customer Insights
+-- Gain an understanding of customer engagement and purchasing behavior.
+
+-- 1.1 How many unique customers have placed orders?
+select count(distinct cust_id) as unique_customers from orders;
+
+-- 1.2 Which customers have placed the highest number of orders?
+select  distinct cust_name,o.cust_id,count(ord_id) over(partition by o.cust_id) as order_count from orders o
+join customers c on o.cust_id = c.cust_id 
+order by order_count desc;
+
+select cust_name,o.cust_id,count(ord_id) as order_count from orders o
+join customers c on o.cust_id = c.cust_id group by o.cust_id order by order_count desc;
+
+
+-- 1.3 What is the total and average purchase value per customer?
+select distinct c.cust_id, c.cust_name, sum(total_price) over(partition by o.cust_id) as total_value, 
+avg(total_price) over(partition by o.cust_id) as average_value from customers c
+join orders o on c.cust_id = o.cust_id
+join order_details od on o.ord_id = od.ord_id
+order by total_value desc;
+
+/*select c.cust_id, c.cust_name, sum(total_price) as total_value, avg(total_price) as average_value from customers c
+join orders o on c.cust_id = o.cust_id
+join order_details od on o.ord_id = od.ord_id
+group by c.cust_id order by c.cust_id asc;*/
+
+
+-- 1.4 Who are the top 5 customers by total purchase amount?
+select distinct c.cust_id, c.cust_name, sum(total_price) over(partition by c.cust_id) as total_purchase_amount 
+from customers c join orders o on o.cust_id = c.cust_id 
+join order_details od on o.ord_id = od.ord_id
+order by total_purchase_amount desc limit 5;
+
+/*select c.cust_id, c.cust_name, sum(od.quantity * od.each_price) as total_pur_amount from customers c
+join orders o on c.cust_id = o.cust_id
+join order_details od on o.ord_id = od.ord_id
+group by c.cust_id order by total_pur_amount desc limit 5;*/
+
+2. Product Performance
+-- Evaluate how well products are performing in terms of sales and revenue.
+
+-- 2.1 How many products exist in each category?
+select * from products;
+select * from categories;
+select cat_name,count(prod_id) as category_count from products p
+join categories c on p.cat_id = c.cat_id
+group by cat_name;
+
+-- 2.2 What is the average price of products by category?
+select * from products;
+select * from categories;
+select cat_name,avg(price) as avg_price from products p
+join categories c on p.cat_id = c.cat_id
+group by cat_name;
+
+
+-- 2.3 Which products have the highest total sales volume (by quantity)?
+select distinct p.prod_name , sum(quantity) over(partition by p.prod_name) as highest_quantity 
+from order_details od join products p on od.prod_id = p.prod_id
+order by highest_quantity desc;
+
+-- 2.4 What is the total revenue generated by each product?
+select * from order_details;
+select * from products;
+with cte1 as
+(select distinct p.prod_id, p.prod_name, sum(od.quantity) over(partition by p.prod_name) as product_quantity, od.each_price from products p
+join order_details od on p.prod_id = od.prod_id order by prod_id asc)
+select * , (each_price * product_quantity) as revenue_generated_by_each_product from cte1;
+
+-- sub query 
+/*select distinct p.prod_id, p.prod_name, sum(od.quantity) over(partition by p.prod_name) as product_quantity, od.each_price from products p
+join order_details od on p.prod_id = od.prod_id order by product_quantity desc;*/
+
+-- 2.5 How do product sales vary by category and supplier?	
+select  distinct cat_id,s.sup_id,s.sup_name, count(quantity) over(partition by cat_id, sup_id) as total_count ,sum(total_price) over(partition by cat_id,sup_id) as total_sales from order_details od
+join products p on od.prod_id = p.prod_id
+join supplier s on p.sup_id = s.sup_id
+order by total_sales desc;
+
+3. Sales and Order Trends
+-- Analyze business performance through orders and revenue over time.
+
+-- 3.1 How many orders have been placed in total?
+select * from orders;
+select  count(*) as order_count from orders;
+
+-- 3.2 What is the average value per order?
+select * from order_details;
+with cte1 as
+(select count(distinct ord_id) as total_orders, sum(total_price) as tot_price from order_details)
+select total_orders,tot_price, (tot_price/total_orders) as avg_value_per_order from cte1;
+
+select * from order_details;
+with cte1 as
+(select count(distinct ord_id) as total_orders, sum(total_price) as tot_price from order_details)
+select total_orders,tot_price, (tot_price/total_orders) as avg_value_per_order from cte1;
+
+-- 3.3 On which dates were the most orders placed?
+select  order_date,count(ord_id) as order_count from orders group by order_date order by order_count desc;
+-- or
+/*select distinct order_date, count(o.ord_id) over(partition by order_date) as order_count from orders o
+join order_details od on o.ord_id = od.ord_id 
+order by order_count desc;
+
+select order_date, count(o.ord_id) as order_count from orders o
+join order_details od on o.ord_id = od.ord_id 
+group by order_date order by order_count desc;*/
+
+-- 3.4 What are the monthly trends in order volume and revenue?
+select month(str_to_date(order_date,"%m/%d/%Y")) as month,count(distinct o.ord_id) as volume,sum(total_price) as revenue
+from orders o
+join order_details od on o.ord_id= od.ord_id
+group by month;
+
+-- 3.5 How do order patterns vary across weekdays and weekends?
+with cte1 as 
+(select ord_id,dayofweek(str_to_date(order_date,"%m/%d/%Y")) as days from orders),
+cte2 as 
+(select *,
+    case 
+        when days IN (1, 7) THEN 'Weekend'  
+        else 'Weekday' 
+    end as order_type 
+from cte1)
+select distinct order_type,count(ord_id) over (partition by order_type) as no_of_order from cte2;
+-- or
+SELECT
+  CASE
+    WHEN WEEKDAY(STR_TO_DATE(order_date, '%m/%d/%Y')) IN (5, 6) THEN 'Weekend'
+    ELSE 'Weekday'
+  END AS day_type,
+  COUNT(*) AS total_orders
+FROM orders
+GROUP BY day_type;
+
+4️. Supplier Contribution
+-- Identify the most active and profitable suppliers.
+
+-- 4.1 How many suppliers are there in the database?
+select count(*) as no_of_suppliers  from supplier;
+
+-- 4.2 Which supplier provides the most products?
+select * from supplier;
+select * from products;
+select  s.sup_id,sup_name, count(prod_name) as product_count from supplier s
+join products p on s.sup_id = p.sup_id
+group by sup_id
+order by product_count desc limit 1;
+-- or
+select  distinct sup_name, count(prod_name) over (partition by s.sup_name)  as product_count  from products p
+join supplier s on  s.sup_id = p.sup_id
+order by product_count desc limit 1;
+
+-- 4.3 What is the average price of products from each supplier?
+select * from products;
+select * from supplier;
+select s.sup_id,s.sup_name, avg(price) as average_price from products p
+join supplier s on  p.sup_id = s.sup_id
+group by sup_id;
+
+-- 4.4 Which suppliers contribute the most to total product sales (by revenue)?
+select s.sup_id,s.sup_name,sum(od.total_price) as total_revenue from order_details od
+join products p on od.prod_id = p.prod_id
+join supplier s on p.sup_id = s.sup_id
+group by s.sup_id order by  total_revenue desc limit 1;
+
+5️. Employee Performance
+-- Assess how employees are handling and influencing sales.
+
+-- 5.1 How many employees have processed orders?
+select * from orders;
+select count(emp_id) as emp_ from employees;
+
+
+-- 5.2 Which employees have handled the most orders?
+select * from orders;
+select * from employees;
+select e.emp_id, e.emp_name,count(cust_id) as order_count from employees e
+join orders o on o.emp_id = e.emp_id
+group by e.emp_id 
+order by order_count desc;
+
+-- 5.3 What is the total sales value processed by each employee?
+select emp_id,sum(total_price) as total_sale from orders join order_details on orders.ord_id = order_details.ord_id group by emp_id;
+
+-- 5.4 What is the average order value handled per employee?
+select (sum(ord_val)/count(emp_id)) as avg_val_per_emp from(select e.emp_id,sum(total_price) as ord_val from orders e join order_details o on e.ord_id = o.ord_id join employees s on e.emp_id = s.emp_id group by emp_id) as e1;
+
+6️. Order Details Deep Dive
+-- Explore item-level sales patterns and pricing behavior.
+
+-- 6.1 What is the relationship between quantity ordered and total price?
+select prod_id, count(ord_id) as abc,sum(quantity) as total_quantity,sum(total_price) as total_amt from order_details group by prod_id order by total_quantity desc, total_amt desc;
+select ord_id, sum(quantity) no_of_quantity,sum(each_price*total_price) as total_price from order_details group by ord_id order by no_of_quantity desc;
+
+-- 6.2 What is the average quantity ordered per product?
+select * from order_details;
+select * from products;
+select distinct prod_id, 
+avg(quantity) over(partition by prod_id)as quantity_ordered 
+from order_details;
+
+-- 6.3 How does the unit price vary across products and orders?
+select p.prod_id,p.prod_name,p.price as listed_price, od.each_price as order_price,
+sum(p.price-od.each_price) as  price_vary
+from products p
+join order_details od on p.prod_id=od.prod_id
+group by p.prod_id,p.prod_name,price,od.each_price
+order by (avg(od.each_price)-p.price) desc;
